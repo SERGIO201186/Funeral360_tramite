@@ -1749,31 +1749,46 @@ async function extraerYAplicar(tipo,base64,mimeType){
     toast('ℹ No se pudo leer automáticamente (sin conexión con el servicio) — llena la Pestaña 2 a mano');
   }
 }
-function _marcarIA(el){
-  el.classList.add('ia-detectado');
-  const quitar=()=>{el.classList.remove('ia-detectado');el.removeEventListener('input',quitar);el.removeEventListener('change',quitar)};
+function _marcarClaseTemporal(el,clase){
+  el.classList.add(clase);
+  const quitar=()=>{el.classList.remove(clase);el.removeEventListener('input',quitar);el.removeEventListener('change',quitar)};
   el.addEventListener('input',quitar);
   el.addEventListener('change',quitar);
 }
+function _marcarIA(el){_marcarClaseTemporal(el,'ia-detectado')}
+// Un campo con esta clase fue autocompletado por la precarga Pestaña 1 →
+// Pestaña 2, no tecleado por el usuario — por eso la lectura automática de
+// documentos (más confiable, viene de una identificación/acta oficial) sí
+// puede reemplazarlo. En cuanto el usuario edita el campo a mano, la clase
+// se quita (ver _marcarClaseTemporal) y ahí sí queda protegido.
+function _marcarPrecarga(el){_marcarClaseTemporal(el,'precarga-t1')}
 // Igual que _setSiVacio pero sin marcar "detectado por IA" — la usa la
 // precarga Pestaña 1 → Pestaña 2 (no es una lectura automática de un
-// documento, es tu propio dato ya capturado en la Pestaña 1).
+// documento, es tu propio dato ya capturado en la Pestaña 1). Si el campo
+// sigue vacío tras esto no se marca nada (no hay nada que proteger ni que
+// dejar reemplazable).
 function _rcFillIfVacio(id,val){
   const el=$(id);
-  if(!el)return;
+  val=(val==null?'':String(val)).trim();
+  if(!el||!val)return;
   if(String(el.value||'').trim())return;
-  el.value=val||'';
+  el.value=val;
+  if(el.value===val)_marcarPrecarga(el);
 }
-// Solo llena si el campo está vacío — nunca pisa algo ya capturado a mano
-// (ni por un documento anterior ni por el usuario). Regresa 1/0 para contar
-// cuántos campos se aplicaron y avisar con un solo toast al final.
+// Solo llena si el campo está vacío o si lo único que tiene es la precarga
+// de la Pestaña 1 (nunca pisa algo tecleado a mano, ni por el usuario ni
+// por una lectura automática anterior) — así, si ya se entró a la Pestaña 2
+// antes de subir el documento, el dato de la identificación/acta oficial sí
+// llega a reemplazar el dato más pobre que trajo la Pestaña 1. Regresa 1/0
+// para contar cuántos campos se aplicaron y avisar con un solo toast al final.
 function _setSiVacio(id,val){
   const el=$(id);
   val=(val==null?'':String(val)).trim();
   if(!el||!val)return 0;
-  if(String(el.value||'').trim())return 0;
+  if(String(el.value||'').trim()&&!el.classList.contains('precarga-t1'))return 0;
   el.value=val;
   if(el.value!==val)return 0; // el navegador rechazó el valor (formato de fecha/hora/opción inválida) — no cuenta como aplicado ni se marca
+  el.classList.remove('precarga-t1');
   _marcarIA(el);
   return 1;
 }
@@ -2245,21 +2260,31 @@ function _rcInferirLugarFallecimiento(texto){
   if(/DOMICILIO|HOGAR|CASA/.test(t))return 'HOGAR';
   return 'OTRO';
 }
-// Igual que _setSiVacio (solo llena si no había nada, marca "detectado por
-// IA" y cuenta para el aviso final), pero para el grupo de radios de Lugar
-// del Fallecimiento en vez de un input de texto.
+// Igual que _setSiVacio (solo llena si no había nada o si lo que había venía
+// de la precarga Pestaña 1, marca "detectado por IA" y cuenta para el aviso
+// final), pero para el grupo de radios de Lugar del Fallecimiento en vez de
+// un input de texto.
 function _setRadioLugarSiVacio(valorInferido){
-  if(!valorInferido||_rcLugarFallecimientoGet())return 0;
+  if(!valorInferido)return 0;
+  const actual=_rcLugarFallecimientoGet();
+  if(actual){
+    const elActual=$('rc-fallec-lugar-'+actual.toLowerCase());
+    if(!elActual||!elActual.classList.contains('precarga-t1'))return 0;
+    elActual.classList.remove('precarga-t1');
+  }
   _rcLugarFallecimientoSet(valorInferido);
   const el=$('rc-fallec-lugar-'+valorInferido.toLowerCase());
   if(el)_marcarIA(el);
   return 1;
 }
-// Igual que _rcFillIfVacio (solo llena si estaba vacío, sin marcar
-// "detectado por IA") pero para el grupo de radios de Lugar del Fallecimiento.
+// Igual que _rcFillIfVacio (solo llena si estaba vacío, marca la clase de
+// precarga para que la lectura automática lo pueda reemplazar después) pero
+// para el grupo de radios de Lugar del Fallecimiento.
 function _rcFillRadioLugarIfVacio(valorInferido){
   if(!valorInferido||_rcLugarFallecimientoGet())return;
   _rcLugarFallecimientoSet(valorInferido);
+  const el=$('rc-fallec-lugar-'+valorInferido.toLowerCase());
+  if(el)_marcarPrecarga(el);
 }
 function rcToggleEscolaridad(){
   $('rc-blq-ultimogrado').style.display=$('rc-escolaridad').value==='PRIMARIA_INCOMPLETA'?'block':'none';
