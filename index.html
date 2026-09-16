@@ -994,10 +994,23 @@ async function api(body){
   const r=await fetch(ST.url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(conDevice)});
   return r.json();
 }
+// El banner #pendbar es una franja delgada arriba de la pantalla — fácil de
+// no notar, sobre todo justo al entrar. La sincronización que corre nada
+// más iniciar sesión (_refrescarTrasSync) siempre llama a sincronizarTodo
+// en modo silencioso, así que el toast explicativo nunca sonaba y el
+// dispositivo se quedaba "pendiente" sin que quien lo instaló se enterara
+// de que debía pedirle a un administrador que lo autorizara desde la app
+// de Huerta. Se avisa aquí, una sola vez por transición a pendiente (no en
+// cada sincronización periódica), sin importar si quien llamó pidió modo
+// silencioso.
 function _actualizarBannerDispositivo(pendiente){
+  const eraPendiente=ST.dispositivoPendiente;
   ST.dispositivoPendiente=pendiente;
   const b=$('pendbar');
   if(b)b.style.display=pendiente?'block':'none';
+  if(pendiente&&!eraPendiente){
+    toast('⏳ Este dispositivo está pendiente de autorización — pide a un administrador que lo apruebe desde la app de Huerta → Configuración → Dispositivos autorizados. Mientras tanto puedes consultar información, pero tus cambios (incluidos los documentos) no se guardarán en la nube.',7000);
+  }
 }
 
 /* ── ALMACENAMIENTO LOCAL (propio de este dispositivo/origen) ── */
